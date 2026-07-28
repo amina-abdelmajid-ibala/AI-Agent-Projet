@@ -1,39 +1,58 @@
-from langgraph.graph import (
-StateGraph,
-END
-)
 from typing import TypedDict
+
+from langgraph.graph import (
+    StateGraph,
+    END
+)
+
 class AgentState(TypedDict):
     question: str
-    def analyse_node(state):
-        print(
+    reponse: str
 
-"Analyse de la question..."
-)
-        return state
-    etat = {
-"question": "Quels sont les congés annuels ?"
-}
-    analyse_node(etat)
-    workflow = StateGraph(
- AgentState
+def analyse_node(state):
+    print("Analyse de la question...")
+    return state
+
+def reponse_node(state):
+    question = state["question"]
+    state["reponse"] = (
+    f"Votre question est : {question}"
     )
-    workflow.add_node(
-"analyse",
-analyse_node
-)
-    workflow.set_entry_point(
+    return state
 
-"analyse"
+workflow = StateGraph(
+    AgentState
+    )
+
+workflow.add_node(
+    "analyse",
+    analyse_node
 )
-    workflow.add_edge(
-"analyse",
-END
+
+workflow.add_node(
+    "reponse",
+    reponse_node
+    )
+
+workflow.set_entry_point(
+    "analyse"
 )
-    agent = workflow.compile()
-    resultat = agent.invoke(
-{
-"question":
-"Quels sont les congés annuels ?"
-}
+
+workflow.add_edge(
+    "analyse",
+    "reponse"
 )
+
+workflow.add_edge(
+    "reponse",
+    END
+)
+
+agent = workflow.compile()
+
+resultat = agent.invoke(
+    {
+        "question": "Quels sont les congés annuels ?"
+    }
+)
+print(resultat)
