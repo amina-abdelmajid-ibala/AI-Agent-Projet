@@ -1,5 +1,5 @@
 from typing import TypedDict
-
+import requests
 from docx import Document
 from langgraph.graph import END, StateGraph
 from pypdf import PdfReader
@@ -17,6 +17,7 @@ class AgentState(TypedDict):
 # ============================
 # Lecture des fichiers
 # ============================
+
 def txt_reader(chemin_fichier):
     with open(chemin_fichier, "r", encoding="utf-8") as fichier:
         return fichier.read()
@@ -32,7 +33,14 @@ def pdf_reader(chemin_fichier):
             contenu += texte + "\n"
 
     return contenu
-
+contenu = txt_reader("documents/rh.txt")
+prompt = f"""
+    Contexte :
+    {contenu}
+    Question :
+    Quels sont les congés ?
+    Réponse :
+    """
 
 def docx_reader(chemin_fichier):
     doc = Document(chemin_fichier)
@@ -43,10 +51,25 @@ def docx_reader(chemin_fichier):
 
     return contenu
 
-
 # ============================
 # Nœuds
 # ============================
+def llm_local(prompt):
+    url = (
+    "http://localhost:11434/api/generate"
+    )
+    data = {
+    "model": "phi3",
+    "prompt": prompt,
+    "stream": False
+    }
+    response = requests.post(
+    url,
+    json=data
+    )
+    return response.json()[
+    "response"
+    ]
 def analyse_node(state):
     print("Analyse de la question...")
     return state
@@ -74,30 +97,83 @@ def reponse_node(state):
     return state
 
 
+# def txt_reader_node(state):
+#     state["reponse"] = txt_reader("documents/rh.txt")
+#     return state
 def txt_reader_node(state):
-    state["reponse"] = txt_reader("documents/rh.txt")
-    return state
-
-
-def pdf_reader_node(state):
-    state["reponse"] = pdf_reader("documents/formation.pdf")
-    return state
-
-
-def docx_reader_node(state):
-    state["reponse"] = docx_reader("documents/procedure.docx")
-    return state
-
-
-def documentation_node(state):
-    state["reponse"] = (
-        "Documents disponibles :\n"
-        "- rh.txt\n"
-        "- formation.pdf\n"
-        "- procedure.docx"
+    contenu = txt_reader(
+    "documents/rh.txt"
+    )
+    question = state["question"]
+    prompt = f"""
+    Contexte :
+    {contenu}
+    Question :
+    {question}
+    Réponse :
+    """
+    state["reponse"] = llm_local(
+    prompt
     )
     return state
 
+# def pdf_reader_node(state):
+#     state["reponse"] = pdf_reader("documents/formation.pdf")
+#     return state
+def pdf_reader_node(state):
+    contenu = pdf_reader(
+    "documents/formation.pdf"
+    )
+    question = state["question"]
+    prompt = f"""
+    Contexte :
+    {contenu}
+    Question :
+    {question}
+    Réponse :
+    """
+    state["reponse"] = llm_local(
+    prompt
+    )
+    return state
+
+# def docx_reader_node(state):
+#     state["reponse"] = docx_reader("documents/procedure.docx")
+#     return state
+def docx_reader_node(state):
+    contenu = docx_reader(
+    "documents/procedure.docx"
+    )
+    question = state["question"]
+    prompt = f"""
+    Contexte :
+    {contenu}
+    Question :
+    {question}
+    Réponse :
+    """
+    state["reponse"] = llm_local(
+    prompt
+    )
+    return state
+
+# def documentation_node(state):
+#     state["reponse"] = (
+#         "Documents disponibles :\n"
+#         "- rh.txt\n"
+#         "- formation.pdf\n"
+#         "- procedure.docx"
+#     )
+#     return state
+def documentation_node(state):
+    question = state["question"]
+    prompt = f"""
+    Réponds à cette question :
+    {question}
+    """
+    reponse = llm_local(prompt)
+    state["reponse"] = reponse
+    return state
 
 # ============================
 # Routage
@@ -185,13 +261,36 @@ for question in questions:
     print("\n==============================")
     print("Question :", question)
 
+    # resultat = agent.invoke(
+    #     {
+    #         "question": question,
+    #         "reponse": "",
+    #         "type_question": "",
+    #     })
     resultat = agent.invoke(
-        {
-            "question": question,
-            "reponse": "",
-            "type_question": "",
-        }
+    {
+    "question":
+    "Qu'est-ce qu'un Agent IA ?"
+    }
     )
-
+    
     print("Réponse :")
     print(resultat["reponse"])
+    print(
+llm_local("Bonjour")
+)
+    print(
+resultat["reponse"]
+)
+    resultat = agent.invoke(
+{"question": "Lis formation.pdf"}
+)
+    resultat = agent.invoke(
+{"question": "Quels sujets sont étudiés ?"}
+)
+    resultat = agent.invoke(
+{"question": "Lis procedure.docx"}
+)
+    resultat = agent.invoke(
+{"question": "Que dit la procédure RH ?"}
+)
