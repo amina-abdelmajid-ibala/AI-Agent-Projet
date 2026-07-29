@@ -3,75 +3,87 @@ import requests
 from docx import Document
 from langgraph.graph import END, StateGraph
 from pypdf import PdfReader
+import time
 
 
-# ============================
-# État de l'agent
-# ============================
+# =====================================================
+# ETAT
+# =====================================================
+
 class AgentState(TypedDict):
     question: str
     reponse: str
     type_question: str
+    historique: str
 
 
-# ============================
-# Lecture des fichiers
-# ============================
+# =====================================================
+# LECTURE DES DOCUMENTS
+# =====================================================
 
-def txt_reader(chemin_fichier):
-    with open(chemin_fichier, "r", encoding="utf-8") as fichier:
-        return fichier.read()
+def txt_reader(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception:
+        return "Fichier introuvable."
 
 
-def pdf_reader(chemin_fichier):
-    lecteur = PdfReader(chemin_fichier)
-    contenu = ""
+def pdf_reader(path):
+    try:
+        lecteur = PdfReader(path)
+        contenu = ""
 
-    for page in lecteur.pages:
-        texte = page.extract_text()
-        if texte:
-            contenu += texte + "\n"
+        for page in lecteur.pages:
+            texte = page.extract_text()
+            if texte:
+                contenu += texte + "\n"
 
-    return contenu
-contenu = txt_reader("documents/rh.txt")
-prompt = f"""
-    Contexte :
-    {contenu}
-    Question :
-    Quels sont les congés ?
-    Réponse :
-    """
+        return contenu
 
-def docx_reader(chemin_fichier):
-    doc = Document(chemin_fichier)
-    contenu = ""
+    except Exception:
+        return "Fichier introuvable."
 
-    for paragraphe in doc.paragraphs:
-        contenu += paragraphe.text + "\n"
 
-    return contenu
+def docx_reader(path):
+    try:
+        doc = Document(path)
+        contenu = ""
 
-# ============================
-# Nœuds
-# ============================
+        for p in doc.paragraphs:
+            contenu += p.text + "\n"
+
+        return contenu
+
+    except Exception:
+        return "Fichier introuvable."
+
+
+# =====================================================
+# OLLAMA
+# =====================================================
+
 def llm_local(prompt):
-    url = (
-    "http://localhost:11434/api/generate"
-    )
+
+    url = "http://localhost:11434/api/generate"
+
     data = {
-    "model": "phi3",
-    "prompt": prompt,
-    "stream": False
+        "model": "phi3",
+        "prompt": prompt,
+        "stream": False
     }
-    response = requests.post(
-    url,
-    json=data
-    )
-    return response.json()[
-    "response"
-    ]
+
+    response = requests.post(url, json=data)
+
+    return response.json()["response"]
+
+
+# =====================================================
+# NOEUDS
+# =====================================================
+
 def analyse_node(state):
-    print("Analyse de la question...")
+    print("[LOG] Analyse :", state["question"])
     return state
 
 
@@ -81,11 +93,11 @@ def greeting_node(state):
 
 
 def calculatrice_node(state):
-    question = state["question"]
 
     try:
-        resultat = eval(question)
+        resultat = eval(state["question"])
         state["reponse"] = str(resultat)
+
     except Exception:
         state["reponse"] = "Calcul impossible."
 
@@ -93,92 +105,99 @@ def calculatrice_node(state):
 
 
 def reponse_node(state):
-    state["reponse"] = f"Votre question est : {state['question']}"
+    state["reponse"] = "Je ne comprends pas votre demande."
     return state
 
 
-# def txt_reader_node(state):
-#     state["reponse"] = txt_reader("documents/rh.txt")
-#     return state
 def txt_reader_node(state):
-    contenu = txt_reader(
-    "documents/rh.txt"
-    )
-    question = state["question"]
+
+    contenu = txt_reader("documents/rh.txt")
+
     prompt = f"""
-    Contexte :
-    {contenu}
-    Question :
-    {question}
-    Réponse :
-    """
-    state["reponse"] = llm_local(
-    prompt
-    )
+Historique :
+{state["historique"]}
+
+Contexte :
+{contenu}
+
+Question :
+{state["question"]}
+
+Réponse :
+"""
+
+    state["reponse"] = llm_local(prompt)
+
     return state
 
-# def pdf_reader_node(state):
-#     state["reponse"] = pdf_reader("documents/formation.pdf")
-#     return state
+
 def pdf_reader_node(state):
-    contenu = pdf_reader(
-    "documents/formation.pdf"
-    )
-    question = state["question"]
+
+    contenu = pdf_reader("documents/formation.pdf")
+
     prompt = f"""
-    Contexte :
-    {contenu}
-    Question :
-    {question}
-    Réponse :
-    """
-    state["reponse"] = llm_local(
-    prompt
-    )
+Historique :
+{state["historique"]}
+
+Contexte :
+{contenu}
+
+Question :
+{state["question"]}
+
+Réponse :
+"""
+
+    state["reponse"] = llm_local(prompt)
+
     return state
 
-# def docx_reader_node(state):
-#     state["reponse"] = docx_reader("documents/procedure.docx")
-#     return state
+
 def docx_reader_node(state):
-    contenu = docx_reader(
-    "documents/procedure.docx"
-    )
-    question = state["question"]
+
+    contenu = docx_reader("documents/procedure.docx")
+
     prompt = f"""
-    Contexte :
-    {contenu}
-    Question :
-    {question}
-    Réponse :
-    """
-    state["reponse"] = llm_local(
-    prompt
-    )
+Historique :
+{state["historique"]}
+
+Contexte :
+{contenu}
+
+Question :
+{state["question"]}
+
+Réponse :
+"""
+
+    state["reponse"] = llm_local(prompt)
+
     return state
 
-# def documentation_node(state):
-#     state["reponse"] = (
-#         "Documents disponibles :\n"
-#         "- rh.txt\n"
-#         "- formation.pdf\n"
-#         "- procedure.docx"
-#     )
-#     return state
+
 def documentation_node(state):
-    question = state["question"]
+
     prompt = f"""
-    Réponds à cette question :
-    {question}
-    """
-    reponse = llm_local(prompt)
-    state["reponse"] = reponse
+Historique :
+{state["historique"]}
+
+Question :
+{state["question"]}
+
+Réponse :
+"""
+
+    state["reponse"] = llm_local(prompt)
+
     return state
 
-# ============================
-# Routage
-# ============================
+
+# =====================================================
+# ROUTEUR
+# =====================================================
+
 def route_question(state):
+
     question = state["question"].lower()
 
     if any(op in question for op in ["+", "-", "*", "/"]):
@@ -202,19 +221,20 @@ def route_question(state):
     return "reponse"
 
 
-# ============================
-# Création du workflow
-# ============================
+# =====================================================
+# WORKFLOW
+# =====================================================
+
 workflow = StateGraph(AgentState)
 
 workflow.add_node("analyse", analyse_node)
-workflow.add_node("reponse", reponse_node)
-workflow.add_node("salutation", greeting_node)
 workflow.add_node("calculatrice", calculatrice_node)
+workflow.add_node("salutation", greeting_node)
 workflow.add_node("txt_reader", txt_reader_node)
 workflow.add_node("pdf_reader", pdf_reader_node)
 workflow.add_node("docx_reader", docx_reader_node)
 workflow.add_node("documentation", documentation_node)
+workflow.add_node("reponse", reponse_node)
 
 workflow.set_entry_point("analyse")
 
@@ -240,57 +260,44 @@ workflow.add_edge("documentation", END)
 workflow.add_edge("salutation", END)
 workflow.add_edge("reponse", END)
 
-# ============================
-# Compilation
-# ============================
 agent = workflow.compile()
 
-# ============================
-# Tests
-# ============================
-questions = [
-    "Bonjour",
-    "50+25",
-    "Lis rh.txt",
-    "Lis formation.pdf",
-    "Lis procedure.docx",
-    "Quels documents sont disponibles ?",
-]
 
-for question in questions:
-    print("\n==============================")
-    print("Question :", question)
+# =====================================================
+# BOUCLE PRINCIPALE
+# =====================================================
 
-    # resultat = agent.invoke(
-    #     {
-    #         "question": question,
-    #         "reponse": "",
-    #         "type_question": "",
-    #     })
+memoire = []
+
+print("===== Agent documentaire =====")
+print("Tapez 'quit' pour quitter.\n")
+
+while True:
+
+    question = input("Vous : ")
+
+    if question.lower() == "quit":
+        break
+
+    historique = "\n".join(memoire)
+
+    debut = time.time()
+
     resultat = agent.invoke(
-    {
-    "question":
-    "Qu'est-ce qu'un Agent IA ?"
-    }
+        {
+            "question": question,
+            "reponse": "",
+            "type_question": "",
+            "historique": historique,
+        }
     )
-    
-    print("Réponse :")
-    print(resultat["reponse"])
-    print(
-llm_local("Bonjour")
-)
-    print(
-resultat["reponse"]
-)
-    resultat = agent.invoke(
-{"question": "Lis formation.pdf"}
-)
-    resultat = agent.invoke(
-{"question": "Quels sujets sont étudiés ?"}
-)
-    resultat = agent.invoke(
-{"question": "Lis procedure.docx"}
-)
-    resultat = agent.invoke(
-{"question": "Que dit la procédure RH ?"}
-)
+
+    fin = time.time()
+
+    reponse = resultat["reponse"]
+
+    print("\nAssistant :", reponse)
+    print(f"Temps : {fin - debut:.2f} s\n")
+
+    memoire.append(f"Utilisateur : {question}")
+    memoire.append(f"Assistant : {reponse}")
