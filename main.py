@@ -1,3 +1,5 @@
+from agent import agent
+from pydantic import BaseModel
 from fastapi import FastAPI
 app = FastAPI()
 @app.get("/bonjour")
@@ -26,3 +28,16 @@ def accueil():
     "message":
     "Bienvenue dans l'Agent IA"
     }
+class QuestionRequest(BaseModel):
+    question: str
+@app.post("/question")
+def poser_question(request: QuestionRequest):
+    resultat = agent.invoke(
+        {
+            "question": request.question,
+            "reponse": "",
+            "type_question": "",
+            "historique": ""  # Optionnel : vous pourrez y connecter une vraie mémoire plus tard
+        }
+    )
+    return resultat

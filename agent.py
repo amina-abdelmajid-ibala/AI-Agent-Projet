@@ -1,10 +1,11 @@
+import importlib
+import time
 from typing import TypedDict
-import requests
+
 from docx import Document
 from langgraph.graph import END, StateGraph
+import requests  # <-- Assurez-vous que cette ligne est collée au bord gauche
 from pypdf import PdfReader
-import time
-
 
 # =====================================================
 # ETAT
@@ -64,18 +65,17 @@ def docx_reader(path):
 # =====================================================
 
 def llm_local(prompt):
-
     url = "http://localhost:11434/api/generate"
-
     data = {
         "model": "phi3",
         "prompt": prompt,
         "stream": False
     }
-
-    response = requests.post(url, json=data)
-
-    return response.json()["response"]
+    try:
+        response = requests.post(url, json=data)
+        return response.json()["response"]
+    except Exception as e:
+        return f"Erreur de connexion à Ollama : {e}"
 
 
 # =====================================================
@@ -93,14 +93,12 @@ def greeting_node(state):
 
 
 def calculatrice_node(state):
-
     try:
+        # Note : eval() comporte des risques de sécurité, préférez ast.literal_eval pour de la production
         resultat = eval(state["question"])
         state["reponse"] = str(resultat)
-
     except Exception:
         state["reponse"] = "Calcul impossible."
-
     return state
 
 
@@ -110,9 +108,7 @@ def reponse_node(state):
 
 
 def txt_reader_node(state):
-
     contenu = txt_reader("documents/rh.txt")
-
     prompt = f"""
 Historique :
 {state["historique"]}
@@ -125,16 +121,12 @@ Question :
 
 Réponse :
 """
-
     state["reponse"] = llm_local(prompt)
-
     return state
 
 
 def pdf_reader_node(state):
-
     contenu = pdf_reader("documents/formation.pdf")
-
     prompt = f"""
 Historique :
 {state["historique"]}
@@ -147,16 +139,12 @@ Question :
 
 Réponse :
 """
-
     state["reponse"] = llm_local(prompt)
-
     return state
 
 
 def docx_reader_node(state):
-
     contenu = docx_reader("documents/procedure.docx")
-
     prompt = f"""
 Historique :
 {state["historique"]}
@@ -169,14 +157,11 @@ Question :
 
 Réponse :
 """
-
     state["reponse"] = llm_local(prompt)
-
     return state
 
 
 def documentation_node(state):
-
     prompt = f"""
 Historique :
 {state["historique"]}
@@ -186,9 +171,7 @@ Question :
 
 Réponse :
 """
-
     state["reponse"] = llm_local(prompt)
-
     return state
 
 
@@ -197,7 +180,6 @@ Réponse :
 # =====================================================
 
 def route_question(state):
-
     question = state["question"].lower()
 
     if any(op in question for op in ["+", "-", "*", "/"]):
@@ -264,40 +246,38 @@ agent = workflow.compile()
 
 
 # =====================================================
-# BOUCLE PRINCIPALE
+# BOUCLE PRINCIPALE (Exécutée uniquement en script direct)
 # =====================================================
 
-memoire = []
+if __name__ == "__main__":
+    memoire = []
 
-print("===== Agent documentaire =====")
-print("Tapez 'quit' pour quitter.\n")
+    print("===== Agent documentaire =====")
+    print("Tapez 'quit' pour quitter.\n")
 
-while True:
+    while True:
+        question = input("Vous : ")
 
-    question = input("Vous : ")
+        if question.lower() == "quit":
+            break
 
-    if question.lower() == "quit":
-        break
+        historique = "\n".join(memoire)
+        debut = time.time()
 
-    historique = "\n".join(memoire)
+        resultat = agent.invoke(
+            {
+                "question": question,
+                "reponse": "",
+                "type_question": "",
+                "historique": historique,
+            }
+        )
 
-    debut = time.time()
+        fin = time.time()
+        reponse = resultat["reponse"]
 
-    resultat = agent.invoke(
-        {
-            "question": question,
-            "reponse": "",
-            "type_question": "",
-            "historique": historique,
-        }
-    )
+        print("\nAssistant :", reponse)
+        print(f"Temps : {fin - debut:.2f} s\n")
 
-    fin = time.time()
-
-    reponse = resultat["reponse"]
-
-    print("\nAssistant :", reponse)
-    print(f"Temps : {fin - debut:.2f} s\n")
-
-    memoire.append(f"Utilisateur : {question}")
-    memoire.append(f"Assistant : {reponse}")
+        memoire.append(f"Utilisateur : {question}")
+        memoire.append(f"Assistant : {reponse}")
